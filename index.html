@@ -117,6 +117,41 @@
         box-shadow: 0 0 0 3px rgba(226, 61, 99, 0.12);
       }
 
+      .ns-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+      .ns-tool-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        color: var(--text-dim);
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          color 0.15s,
+          border-color 0.15s;
+      }
+      .ns-tool-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent-dark);
+        background: var(--accent-soft);
+      }
+      .ns-tool-btn-ghost:hover {
+        border-color: var(--error);
+        color: var(--error);
+        background: var(--error-soft);
+      }
+
       .ns-grid {
         display: flex;
         flex-direction: column;
@@ -509,6 +544,14 @@
           </div>
         </div>
 
+        <div class="ns-toolbar">
+          <button class="ns-tool-btn" id="nsSaveDefaultBtn"></button>
+          <button
+            class="ns-tool-btn ns-tool-btn-ghost"
+            id="nsResetDefaultBtn"
+          ></button>
+        </div>
+
         <div class="ns-grid" id="nsGrid"></div>
 
         <div class="ns-add-card" id="nsAddCard">
@@ -550,6 +593,10 @@
         var nsInput = document.getElementById("nsInput");
         var saveBtn = document.getElementById("nsSaveBtn");
         var msgEl = document.getElementById("nsMsg");
+        var saveDefaultBtn = document.getElementById("nsSaveDefaultBtn");
+        var resetDefaultBtn = document.getElementById("nsResetDefaultBtn");
+        saveDefaultBtn.innerHTML = iconSave() + "Salvar como padrão";
+        resetDefaultBtn.innerHTML = iconReset() + "Restaurar padrão de fábrica";
 
         var blocks = [];
         var blockSeq = 0;
@@ -590,6 +637,12 @@
         }
         function iconTrash() {
           return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+        }
+        function iconSave() {
+          return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+        }
+        function iconReset() {
+          return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
         }
 
         var stampSeq = 0;
@@ -847,12 +900,96 @@
           b.nameInput.select();
         });
 
-        // blocos iniciais (nomes editáveis livremente)
-        createBlock("EXTRATO DE MÃO DE OBRA PARA CONFERÊNCIA");
-        createBlock("CROQUI");
-        createBlock("CROQUI DIGITAL");
-        createBlock("RELATÓRIO FOTOGRÁFICO DO LEVANTAMENTO DE CAMPO");
-        createBlock("INSTRUMENTO PARTICULAR DE CONSTITUIÇÃO DE SERVIDÃO");
+        var STORAGE_KEY = "ns_blocos_padrao_v1";
+        var DEFAULT_BLOCKS = [
+          "COMUNICADO DE COMISSIONAMENTO DE PROJETO - CCP",
+          "DOCUMENTOS PARA ANÁLISE TÉCNICA DA INTERVENÇÃO AMBIENTAL",
+          "EXTRATO DE MÃO DE OBRA PARA CONFERÊNCIA",
+          "ORÇAMENTO DO PROORC - LISTA CODIFICADA",
+          "ORÇAMENTO DO PROORC - MATERIAL REQUISITADO",
+          "ORÇAMENTO DO PROORC - SERVIÇOS CONTRATADOS",
+          "ORÇAMENTO DO PROORC - TOTALIZAÇÃO",
+          "PROJETO - REDE DE DISTRIBUIÇÃO",
+          "ANÁLISE DE DERIVAÇÃO - DERIVA",
+          "INSTRUMENTO PARTICULAR DE CONSTITUIÇÃO DE SERVIDÃO",
+          "MEMÓRIA DE CÁLCULO DE AFASTAMENTO DE REDE",
+          "MEMÓRIA DE CÁLCULO DE ESFORÇO MECÂNICO",
+          "MEMÓRIA DE CÁLCULO DE QUEDA DE TENSÃO",
+          "OBSERVACOES DA CONTRATADA PARA A CEMIG",
+          "ORÇAMENTO DO PROORC - MATERIAL SALVADO",
+          "PROJETO - DETALHE",
+          "PROJETO - OCUPAÇÃO DE FAIXA",
+          "PROJETO - TRAVESSIA",
+          "RELATÓRIO DE SIMULAÇÃO DE CARGA",
+          "RELATÓRIO FOTOGRÁFICO DO LEVANTAMENTO DE CAMPO",
+          "RELAÇÃO DE DADOS FÍSICOS - TÉCNICOS DA OBRA",
+          "RESULTADO DE ANÁLISE DA COORDENAÇÃO E PROTEÇÃO",
+        ];
+
+        function loadSavedBlocks() {
+          try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length) return parsed;
+          } catch (e) {
+            /* localStorage indisponível */
+          }
+          return null;
+        }
+
+        function buildBlocksFrom(list) {
+          list.forEach(function (item) {
+            var b = createBlock(typeof item === "string" ? item : item.name);
+            var merge = typeof item === "string" ? true : item.merge !== false;
+            if (!merge) {
+              b.merge = false;
+              var chk = b.el.querySelector(".ns-merge-check");
+              if (chk) chk.checked = false;
+            }
+          });
+        }
+
+        var savedBlocks = loadSavedBlocks();
+        buildBlocksFrom(savedBlocks || DEFAULT_BLOCKS);
+
+        saveDefaultBtn.addEventListener("click", function () {
+          var data = blocks.map(function (b) {
+            return { name: b.nameInput.value, merge: b.merge };
+          });
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            setMsg(
+              "Padrão salvo — da próxima vez os blocos já abrem assim.",
+              "ok",
+            );
+          } catch (e) {
+            setMsg(
+              "Não consegui salvar — o navegador bloqueou o armazenamento local.",
+              "err",
+            );
+          }
+        });
+
+        resetDefaultBtn.addEventListener("click", function () {
+          if (
+            !confirm(
+              "Restaurar os blocos para o padrão de fábrica? Isso substitui os blocos atuais na tela.",
+            )
+          )
+            return;
+          try {
+            localStorage.removeItem(STORAGE_KEY);
+          } catch (e) {
+            /* ignorar */
+          }
+          blocks.slice().forEach(function (b) {
+            b.el.remove();
+          });
+          blocks = [];
+          buildBlocksFrom(DEFAULT_BLOCKS);
+          setMsg("Voltou pro padrão de fábrica.", "ok");
+        });
 
         // ---- conversão / mesclagem em PDF ----
 
